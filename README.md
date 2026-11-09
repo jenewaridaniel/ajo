@@ -43,16 +43,19 @@ Robinhood Chain (chain ID 4663). Explorer: [robinhoodchain.blockscout.com](https
 
 | | Address |
 |---|---|
-| **Ajo contract (current)** | [`0x75A67714D383F80979C300e22ceDB5Dd6DDd09ed`](https://robinhoodchain.blockscout.com/address/0x75A67714D383F80979C300e22ceDB5Dd6DDd09ed) |
+| **Ajo contract (current, with vouching)** | [`0xDf3f3743768c2609F3b33d9dEad43E95DC016588`](https://robinhoodchain.blockscout.com/address/0xDf3f3743768c2609F3b33d9dEad43E95DC016588) |
+| Ajo contract (second version: creator last, invite-only) | [`0x75A67714D383F80979C300e22ceDB5Dd6DDd09ed`](https://robinhoodchain.blockscout.com/address/0x75A67714D383F80979C300e22ceDB5Dd6DDd09ed) |
 | Ajo contract (first version) | [`0x114B2848e0a62376895595471844f6c587dc008C`](https://robinhoodchain.blockscout.com/address/0x114B2848e0a62376895595471844f6c587dc008C) |
 | USDG (savings) | [`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`](https://robinhoodchain.blockscout.com/token/0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168) |
 | $WIF, World is Flat (bond) | [`0x5173b8eA6923c2d40267890D45C46a3480954773`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773) |
 
-**The current version** has run a real invite-only circle in which a member missed a round. The creator invited one wallet, which joined and took the first turn (the creator is last). The creator then did not pay round 1, so their 100 $WIF bond went to the member who kept paying. That member received its round 1 pot, was refunded its round 2 payment (the creator's turn, forfeited), and claimed 200 $WIF at the end: its own bond plus the lost one. Afterwards the contract held nothing (8 transactions).
+**The current version** adds vouching to the second; its code is byte for byte the tested build in this repository.
+
+**The second version** ran a real invite-only circle in which a member missed a round. The creator invited one wallet, which joined and took the first turn (the creator is last). The creator then did not pay round 1, so their 100 $WIF bond went to the member who kept paying. That member received its round 1 pot, was refunded its round 2 payment (the creator's turn, forfeited), and claimed 200 $WIF at the end: its own bond plus the lost one. Afterwards the contract held nothing (8 transactions).
 
 **The first version** ran a complete real circle with two members: create, join, four payments, two rounds closed, two pots withdrawn and two bonds claimed (12 transactions). Afterwards the contract held no USDG and no $WIF, and both members were back to their starting balances.
 
-Testing that version against its own code showed a way to cheat: the creator set the bond **and** took the first pot, so a small bond made "take the pot and leave" profitable. The current version fixes this (creator last, invite-only circles).
+Testing that version against its own code showed a way to cheat: the creator set the bond **and** took the first pot, so a small bond made "take the pot and leave" profitable. The second version fixed this (creator last, invite-only circles); the current one keeps those fixes and adds vouching.
 
 ## Repository
 

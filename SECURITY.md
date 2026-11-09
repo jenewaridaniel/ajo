@@ -2,7 +2,7 @@
 
 **This is an internal review by the builders, not a professional audit.** An audit means an independent firm, several reviewers and usually weeks of work. Until Ajo has one, use small amounts.
 
-- **Scope:** `contracts/src/Ajo.sol` as in this repository (including vouching), the two tokens it depends on, and the parts of the app that send transactions (`app/src/lib/tx.ts`).
+- **Scope:** `contracts/src/Ajo.sol` as in this repository (including vouching), deployed on Robinhood Chain at [`0xDf3f3743768c2609F3b33d9dEad43E95DC016588`](https://robinhoodchain.blockscout.com/address/0xDf3f3743768c2609F3b33d9dEad43E95DC016588); the two tokens it depends on; and the parts of the app that send transactions (`app/src/lib/tx.ts`).
 - **Deployed code = tested code:** the bytecode on the chain matches this repository's build byte for byte, apart from the two token addresses set at deployment and the compiler's metadata hash.
 - **Date:** November 2026.
 
