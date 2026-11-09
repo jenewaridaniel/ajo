@@ -11,6 +11,7 @@ import { useTx } from "../lib/tx";
 import { Button, Panel, TxStatus } from "../components/ui";
 
 const ROUND_CHOICES = [
+  { label: "1 minute (for testing; the shortest the contract allows)", seconds: 60 },
   { label: "5 minutes (for trying it out)", seconds: 300 },
   { label: "1 hour", seconds: 3600 },
   { label: "1 day", seconds: 86400 },
