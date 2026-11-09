@@ -30,7 +30,7 @@ contract Ajo is ReentrancyGuard {
     // ─── Limits ───────────────────────────────────────────────────────────
     uint256 public constant MIN_MEMBERS = 2;
     uint256 public constant MAX_MEMBERS = 20; // keeps every loop small and cheap
-    uint256 public constant MIN_ROUND = 60; // seconds; short rounds make a live demo possible
+    uint256 public constant MIN_ROUND = 30; // seconds; very short rounds are for testing and live demos
     uint256 public constant MAX_ROUND = 30 days;
     uint256 public constant MAX_NAME = 48; // bytes
     uint256 public constant MAX_INVITES = 50; // per call, so one call stays cheap

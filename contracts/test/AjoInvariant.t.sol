@@ -58,7 +58,7 @@ contract Handler is Test {
             invited[1] = _who(guest + 1);
         }
         vm.prank(_who(who));
-        try ajo.createCircle("c", uint128(bound(pay, 1, 1_000e6)), uint128(bound(bond, 1, 1_000e18)), uint32(bound(size, 2, 4)), uint32(bound(len, 60, 3 days)), invited) {} catch {}
+        try ajo.createCircle("c", uint128(bound(pay, 1, 1_000e6)), uint128(bound(bond, 1, 1_000e18)), uint32(bound(size, 2, 4)), uint32(bound(len, 30, 3 days)), invited) {} catch {}
     }
 
     function join(uint256 who, uint256 c) external {

@@ -106,7 +106,8 @@ contract AjoTest is Test {
         vm.expectRevert(Ajo.BadSize.selector);
         ajo.createCircle("x", PAY, BOND, 21, ROUND, none);
         vm.expectRevert(Ajo.BadRoundLength.selector);
-        ajo.createCircle("x", PAY, BOND, 3, 59, none);
+        ajo.createCircle("x", PAY, BOND, 3, 29, none);
+        ajo.createCircle("x", PAY, BOND, 3, 30, none); // 30 seconds is the shortest allowed
         vm.expectRevert(Ajo.BadAmount.selector);
         ajo.createCircle("x", 0, BOND, 3, ROUND, none);
         vm.expectRevert(Ajo.BadName.selector);

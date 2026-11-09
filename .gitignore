@@ -6,3 +6,6 @@ CLAUDE.md
 
 # Local Netlify folder
 .netlify
+
+# Local screen + camera recorder for the demo video (not part of Ajo)
+recorder/
