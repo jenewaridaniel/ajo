@@ -64,9 +64,11 @@ contract Handler is Test {
     function join(uint256 who, uint256 c) external {
         (bool ok, uint256 id) = _circle(c);
         if (!ok) return;
+        bool vouched = ajo.vouchFrom(id, _who(who)) != address(0);
         vm.prank(_who(who));
         try ajo.join(id) {
             ++okJoins;
+            if (vouched) ++okVouchedJoins;
         } catch {}
     }
 
@@ -84,6 +86,25 @@ contract Handler is Test {
         list[0] = _who(guest);
         vm.prank(_who(who));
         try ajo.invite(id, list) {} catch {}
+    }
+
+    uint256 public okVouches;
+    uint256 public okVouchedJoins;
+
+    function vouch(uint256 who, uint256 c, uint256 friend) external {
+        (bool ok, uint256 id) = _circle(c);
+        if (!ok) return;
+        vm.prank(_who(who));
+        try ajo.vouch(id, _who(friend)) {
+            ++okVouches;
+        } catch {}
+    }
+
+    function withdrawVouch(uint256 who, uint256 c, uint256 friend) external {
+        (bool ok, uint256 id) = _circle(c);
+        if (!ok) return;
+        vm.prank(_who(who));
+        try ajo.withdrawVouch(id, _who(friend)) {} catch {}
     }
 
     function contribute(uint256 who, uint256 c) external {
@@ -114,10 +135,11 @@ contract Handler is Test {
         (bool ok, uint256 id) = _circle(c);
         if (!ok) return;
         address p = _who(who);
-        uint256 before = wif.balanceOf(p);
-        vm.prank(p);
-        try ajo.claimBond(id) {
-            wifClaimed[id] += wif.balanceOf(p) - before;
+        // Measure what leaves the contract: with a voucher, one claim pays two people.
+        uint256 before = wif.balanceOf(address(ajo));
+        vm.prank(_who(who + 1)); // anyone may claim for a member
+        try ajo.claimBond(id, p) {
+            wifClaimed[id] += before - wif.balanceOf(address(ajo));
             ++okClaims;
         } catch {}
     }
@@ -168,7 +190,7 @@ contract AjoInvariantTest is Test {
             Ajo.Circle memory c = ajo.getCircle(id);
             uint256 inIt = (c.startedAt == 0 ? ajo.getMembers(id).length : c.size) * uint256(c.bond);
             assertLe(h.wifClaimed(id), inIt, "a circle paid out more WIF than was locked in it");
-            locked += inIt - h.wifClaimed(id);
+            locked += inIt - h.wifClaimed(id) + ajo.pendingVouches(id);
         }
         uint256 held = wif.balanceOf(address(ajo));
         assertGe(held, locked, "contract holds less WIF than the bonds still locked");
@@ -221,7 +243,7 @@ contract AjoInvariantTest is Test {
     uint256 constant STEPS = 150;
 
     function test_randomWalkKeepsEveryRule() public {
-        uint256[7] memory total; // joins, pays, settles, withdraws, claims, defaults, finished circles
+        uint256[9] memory total; // joins, pays, settles, withdraws, claims, defaults, finished circles, vouches, vouched joins
         for (uint256 run; run < RUNS; ++run) {
             uint256 snap = vm.snapshotState();
             for (uint256 step; step < STEPS; ++step) {
@@ -233,6 +255,8 @@ contract AjoInvariantTest is Test {
                 else if (a < 28) h.join(x, y);
                 else if (a < 31) h.leave(x, y);
                 else if (a < 33) h.invite(x, y, x >> 20);
+                else if (a < 36) h.vouch(x, y, x >> 30);
+                else if (a < 37) h.withdrawVouch(x, y, x >> 30);
                 else if (a < 63) h.contribute(x, y);
                 else if (a < 72) h.settle(y);
                 else if (a < 80) h.withdraw(x);
@@ -248,6 +272,8 @@ contract AjoInvariantTest is Test {
             total[2] += h.okSettles();
             total[3] += h.okWithdraws();
             total[4] += h.okClaims();
+            total[7] += h.okVouches();
+            total[8] += h.okVouchedJoins();
             for (uint256 id; id < ajo.circleCount(); ++id) {
                 Ajo.Circle memory c = ajo.getCircle(id);
                 total[5] += c.defaults;
@@ -262,6 +288,8 @@ contract AjoInvariantTest is Test {
         emit log_named_uint("bonds claimed", total[4]);
         emit log_named_uint("missed payments (defaults)", total[5]);
         emit log_named_uint("circles that finished", total[6]);
+        emit log_named_uint("vouches made", total[7]);
+        emit log_named_uint("members who joined on a vouch", total[8]);
         assertGt(total[4], 0, "the walk never reached a bond claim");
         assertGt(total[5], 0, "the walk never reached a missed payment");
     }

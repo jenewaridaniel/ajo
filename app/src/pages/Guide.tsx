@@ -69,6 +69,10 @@ const steps: Step[] = [
             turns.
           </>,
           <>
+            <strong>Vouch:</strong> know someone with no $WIF? Lock the bond for them. If they pay every round you get it back; if they miss one, you lose it.
+            That's how an ajo has always taken in new people: someone who knows them answers for them.
+          </>,
+          <>
             <strong>Join:</strong> open the invite link and press Join. The pot goes round in the order people joined, with the creator last.
           </>,
           <>Your wallet asks twice: first to allow that exact amount (nothing more), then to do it.</>,
@@ -102,8 +106,11 @@ const steps: Step[] = [
       <>
         <List
           items={[
-            <>After the last round, everyone who paid every round claims their bond back, plus an equal share of any bonds that were lost.</>,
-            <>Every round you pay on time shows on the leaderboard, so people can see who keeps their word.</>,
+            <>
+              After the last round, everyone who paid every round claims their bond back, plus an equal share of any bonds that were lost. If someone vouched
+              for you, the bond goes back to them and the share is yours.
+            </>,
+            <>Every round you pay on time shows on the leaderboard, and so does every vouch you make, so people can see who keeps their word.</>,
             <>This is a hackathon build and the contract has not been audited. Use small amounts.</>,
           ]}
         />
@@ -226,7 +233,7 @@ function WalletCheck() {
         </Need>
         <Need label="$WIF for the bond" ok={has(wif)} status={wif !== undefined ? `You have ${amount(wif, WIF.decimals)} WIF` : undefined}>
           Swap ETH for WIF in your wallet or on Pons. Check the address: <TokenLink address={WIF.address} />. Another token also called WIF (dogwifhat) is not
-          the one.
+          the one. No $WIF? Someone who knows you can <strong>vouch</strong> for you: they lock the bond on your behalf, and you only need USDG.
         </Need>
       </ul>
       {!isConnected && (

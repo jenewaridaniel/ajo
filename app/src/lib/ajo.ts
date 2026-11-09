@@ -122,6 +122,7 @@ export type MemberState = {
   defaulted: boolean;
   paidThisRound: boolean;
   bondClaimed: boolean;
+  bondPaidBy?: `0x${string}`; // who locked this member's bond: themselves, or a voucher
 };
 
 /** One circle, with each member's standing in the open round. */
@@ -149,14 +150,16 @@ export function useCircle(id: number) {
       { ...ajo, functionName: "isDefaulted", args: [BigInt(id), m] } as const,
       { ...ajo, functionName: "hasPaid", args: [BigInt(id), round, m] } as const,
       { ...ajo, functionName: "bondClaimed", args: [BigInt(id), m] } as const,
+      { ...ajo, functionName: "bondPaidBy", args: [BigInt(id), m] } as const,
     ]),
     query: { enabled: enabled && members.length > 0, refetchInterval: POLL },
   });
 
   const states: MemberState[] = members.map((address, i) => {
     const r = per.data;
-    const ok = (k: number) => r?.[i * 3 + k]?.status === "success" && r?.[i * 3 + k]?.result === true;
-    return { address, position: i, defaulted: ok(0), paidThisRound: ok(1), bondClaimed: ok(2) };
+    const ok = (k: number) => r?.[i * 4 + k]?.status === "success" && r?.[i * 4 + k]?.result === true;
+    const payer = r?.[i * 4 + 3]?.status === "success" ? (r[i * 4 + 3].result as `0x${string}`) : undefined;
+    return { address, position: i, defaulted: ok(0), paidThisRound: ok(1), bondClaimed: ok(2), bondPaidBy: payer };
   });
 
   const pot = useReadContract({
@@ -225,4 +228,40 @@ export function useCanJoin(c: Circle | undefined, who: `0x${string}` | undefined
   if (!c || !who) return undefined;
   if (!c.inviteOnly || who.toLowerCase() === c.creator.toLowerCase()) return true;
   return r.data as boolean | undefined;
+}
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+/** Who, if anyone, has locked a bond for `who` in circle `id` that `who` has not used yet. */
+export function useVouchFor(id: number, who: `0x${string}` | undefined) {
+  const r = useReadContract({
+    ...ajo,
+    functionName: "vouchFrom",
+    args: [BigInt(id), who ?? ZERO],
+    query: { enabled: enabled && !!who, refetchInterval: POLL },
+  });
+  const v = r.data as `0x${string}` | undefined;
+  return v && v !== ZERO ? v : undefined;
+}
+
+/**
+ * Vouches `voucher` made in circle `id` that are still waiting to be used
+ * (the person has not joined and the voucher has not taken the bond back).
+ * Found from the event history, then confirmed against the contract.
+ */
+export function usePendingVouches(id: number, voucher: `0x${string}` | undefined) {
+  const events = useAjoEvents();
+  const me = voucher?.toLowerCase();
+  const candidates = [
+    ...new Set(
+      (events.data ?? [])
+        .filter((e) => e.eventName === "Vouched" && Number(e.args.id) === id && String(e.args.voucher).toLowerCase() === me)
+        .map((e) => e.args.member as `0x${string}`),
+    ),
+  ];
+  const r = useReadContracts({
+    contracts: candidates.map((m) => ({ ...ajo, functionName: "vouchFrom", args: [BigInt(id), m] }) as const),
+    query: { enabled: enabled && candidates.length > 0, refetchInterval: POLL },
+  });
+  return candidates.filter((_, i) => r.data?.[i]?.status === "success" && String(r.data[i].result).toLowerCase() === me);
 }

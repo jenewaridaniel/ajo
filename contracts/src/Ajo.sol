@@ -17,8 +17,13 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 /// Savings are in a stable token (for example USDG), so what people save does
 /// not swing with a token price. $WIF is the commitment, not the savings.
 ///
-/// Money only ever leaves through `withdraw` and `claimBond`, pulled by the
-/// person it belongs to; nothing is pushed out while a round is being settled.
+/// Someone with $WIF can vouch for someone without it: they lock the bond on
+/// the newcomer's behalf, get it back if the newcomer pays every round, and lose
+/// it if they miss one. That is how a real ajo takes in new people.
+///
+/// Money only ever leaves through `withdraw`, `claimBond`, `leave` and
+/// `withdrawVouch`, always to the person it belongs to; nothing is pushed out
+/// while a round is being settled.
 contract Ajo is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -57,6 +62,9 @@ contract Ajo is ReentrancyGuard {
     mapping(uint256 => mapping(address => bool)) public bondClaimed;
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public hasPaid; // circle => round => member
     mapping(uint256 => mapping(uint256 => uint256)) public roundPot; // circle => round => amount
+    mapping(uint256 => mapping(address => address)) public bondPaidBy; // who locked each member's bond: themselves or a voucher
+    mapping(uint256 => mapping(address => address)) public vouchFrom; // a bond locked for this wallet that it has not used yet
+    mapping(uint256 => uint256) public pendingVouches; // bond tokens held for vouches not used yet, per circle
 
     /// @notice Savings token each address can withdraw (payouts and refunds).
     mapping(address => uint256) public owed;
@@ -71,7 +79,10 @@ contract Ajo is ReentrancyGuard {
     event Defaulted(uint256 indexed id, uint256 indexed round, address indexed member, uint256 bondLost);
     event RoundSettled(uint256 indexed id, uint256 indexed round, address indexed recipient, uint256 pot, bool refunded);
     event Withdrawn(address indexed account, uint256 amount);
-    event BondClaimed(uint256 indexed id, address indexed member, uint256 amount);
+    event BondClaimed(uint256 indexed id, address indexed member, uint256 amount); // the member's whole finish: bond + share
+    event Vouched(uint256 indexed id, address indexed member, address indexed voucher);
+    event VouchWithdrawn(uint256 indexed id, address indexed member, address indexed voucher);
+    event VouchReturned(uint256 indexed id, address indexed member, address indexed voucher, uint256 amount);
 
     // ─── Errors ───────────────────────────────────────────────────────────
     error BadSize();
@@ -95,6 +106,9 @@ contract Ajo is ReentrancyGuard {
     error NotCreator();
     error NotInviteOnly();
     error TooManyInvites();
+    error BadVouch();
+    error AlreadyVouched();
+    error NotVoucher();
 
     constructor(IERC20 savingsToken_, IERC20 bondToken_) {
         if (address(savingsToken_) == address(0) || address(bondToken_) == address(0)) revert BadAmount();
@@ -157,7 +171,35 @@ contract Ajo is ReentrancyGuard {
         _invite(id, who);
     }
 
-    /// @notice Leave a circle before it starts and get your bond back.
+    /// @notice Lock the bond for someone else, so they can join with no $WIF of
+    /// their own. They still choose whether to join. If they pay every round, the
+    /// bond comes back to you at the end; if they miss a round, you lose it. Until
+    /// they join, you can take it back with `withdrawVouch`.
+    function vouch(uint256 id, address member) external nonReentrant {
+        Circle storage c = _circle(id);
+        if (member == address(0) || member == msg.sender) revert BadVouch();
+        if (c.startedAt != 0) revert AlreadyStarted();
+        if (isMember[id][member]) revert AlreadyMember();
+        if (vouchFrom[id][member] != address(0)) revert AlreadyVouched();
+        if (c.inviteOnly && member != c.creator && !isInvited[id][member]) revert NotInvited();
+
+        vouchFrom[id][member] = msg.sender;
+        pendingVouches[id] += c.bond;
+        emit Vouched(id, member, msg.sender);
+        bondToken.safeTransferFrom(msg.sender, address(this), c.bond);
+    }
+
+    /// @notice Take back a bond you locked for someone who has not joined (yet).
+    function withdrawVouch(uint256 id, address member) external nonReentrant {
+        Circle storage c = _circle(id);
+        if (vouchFrom[id][member] != msg.sender) revert NotVoucher();
+        vouchFrom[id][member] = address(0);
+        pendingVouches[id] -= c.bond;
+        emit VouchWithdrawn(id, member, msg.sender);
+        bondToken.safeTransfer(msg.sender, c.bond);
+    }
+
+    /// @notice Leave a circle before it starts; the bond goes back to whoever locked it.
     function leave(uint256 id) external nonReentrant {
         Circle storage c = _circle(id);
         if (c.startedAt != 0) revert AlreadyStarted();
@@ -174,8 +216,10 @@ contract Ajo is ReentrancyGuard {
             }
         }
         isMember[id][msg.sender] = false;
+        address payer = bondPaidBy[id][msg.sender];
+        bondPaidBy[id][msg.sender] = address(0);
         emit Left(id, msg.sender);
-        bondToken.safeTransfer(msg.sender, c.bond);
+        bondToken.safeTransfer(payer, c.bond);
     }
 
     // ─── While it runs ────────────────────────────────────────────────────
@@ -236,19 +280,29 @@ contract Ajo is ReentrancyGuard {
     /// back their bond plus an equal share of the bonds lost by those who did.
     /// If every member missed a round there is nobody to share with, so each
     /// takes back only their own bond rather than leaving it locked forever.
-    function claimBond(uint256 id) external nonReentrant {
+    /// Anyone may call this for any member: the bond always goes to whoever
+    /// locked it (the member or their voucher) and the share to the member, so a
+    /// voucher never depends on the member coming back to claim.
+    function claimBond(uint256 id, address member) external nonReentrant {
         Circle storage c = _circle(id);
         if (c.startedAt == 0) revert NotOver();
         _settleDue(id, c); // the last round closes itself once its time is up
         if (c.roundsSettled < c.size) revert NotOver();
-        if (!isMember[id][msg.sender]) revert NotMember();
-        if (isDefaulted[id][msg.sender] && c.defaults < c.size) revert MemberDefaulted();
-        if (bondClaimed[id][msg.sender]) revert AlreadyClaimed();
+        if (!isMember[id][member]) revert NotMember();
+        if (isDefaulted[id][member] && c.defaults < c.size) revert MemberDefaulted();
+        if (bondClaimed[id][member]) revert AlreadyClaimed();
 
-        bondClaimed[id][msg.sender] = true;
+        bondClaimed[id][member] = true;
         uint256 amount = bondShare(id);
-        emit BondClaimed(id, msg.sender, amount);
-        bondToken.safeTransfer(msg.sender, amount);
+        address payer = bondPaidBy[id][member];
+        emit BondClaimed(id, member, amount);
+        if (payer == member) {
+            bondToken.safeTransfer(member, amount);
+        } else {
+            emit VouchReturned(id, member, payer, c.bond);
+            bondToken.safeTransfer(payer, c.bond);
+            if (amount > c.bond) bondToken.safeTransfer(member, amount - c.bond);
+        }
     }
 
     // ─── Reading ──────────────────────────────────────────────────────────
@@ -357,6 +411,7 @@ contract Ajo is ReentrancyGuard {
         if (c.inviteOnly && msg.sender != c.creator && !isInvited[id][msg.sender]) revert NotInvited();
         address[] storage list = _members[id];
         if (list.length >= c.size) revert Full();
+        address voucher = vouchFrom[id][msg.sender];
 
         isMember[id][msg.sender] = true;
         list.push(msg.sender);
@@ -374,6 +429,14 @@ contract Ajo is ReentrancyGuard {
             c.startedAt = uint64(block.timestamp);
             emit Started(id, block.timestamp);
         }
-        bondToken.safeTransferFrom(msg.sender, address(this), c.bond);
+        if (voucher != address(0)) {
+            // Someone vouched for this member: their bond, already held here, covers it.
+            vouchFrom[id][msg.sender] = address(0);
+            pendingVouches[id] -= c.bond;
+            bondPaidBy[id][msg.sender] = voucher;
+        } else {
+            bondPaidBy[id][msg.sender] = msg.sender;
+            bondToken.safeTransferFrom(msg.sender, address(this), c.bond);
+        }
     }
 }

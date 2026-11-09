@@ -96,6 +96,11 @@ function Row({ s, rank, isMe }: { s: Saver; rank: number; isMe: boolean }) {
           <Addr address={s.address} />
         </span>
         {s.missed === 0 && s.roundsPaid > 0 && <Badge tone={top ? "plain" : "lime"}>Never missed</Badge>}
+        {s.vouchesKept + s.vouchesLost > 0 && (
+          <Badge tone={top ? "plain" : s.vouchesLost === 0 ? "violet" : "amber"}>
+            Vouches kept {s.vouchesKept}/{s.vouchesKept + s.vouchesLost}
+          </Badge>
+        )}
       </div>
       <Cell top={top} label="Rounds paid" value={String(s.roundsPaid)} />
       <Cell top={top} label="USDG saved" value={amount(s.usdgSaved, USDG.decimals, 2)} />

@@ -4,7 +4,7 @@ import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { ajoAbi } from "../abi";
 import { AJO_ADDRESS, USDG, WIF, explorer } from "../config";
-import { clock, phaseOf, useCanJoin, useCircle, useHistory, useNow, useWallet, type Circle, type MemberState, type SettledRound } from "../lib/ajo";
+import { clock, phaseOf, useCanJoin, useCircle, useHistory, useNow, usePendingVouches, useVouchFor, useWallet, type Circle, type MemberState, type SettledRound } from "../lib/ajo";
 import { amount, countdown, duration } from "../lib/format";
 import { useTx } from "../lib/tx";
 import { Addr, Badge, Button, Eyebrow, Panel, Stat, TxStatus } from "../components/ui";
@@ -64,6 +64,7 @@ export default function CircleView({ id }: { id: number }) {
           {phase === "open" && <OpenActions circle={circle} />}
           {phase === "running" && <RoundPanel circle={circle} members={members} potSoFar={potSoFar} now={now} />}
           {phase === "finished" && <FinishedPanel circle={circle} members={members} bondShare={bondShare} />}
+          <VouchPanel circle={circle} />
           <PenaltyNote circle={circle} />
         </div>
         <MemberList circle={circle} members={members} now={now} rounds={rounds} />
@@ -105,8 +106,9 @@ function OpenActions({ circle }: { circle: Circle }) {
   const isMember = circle.members.some((m) => m.toLowerCase() === address?.toLowerCase());
   const isCreator = address?.toLowerCase() === circle.creator.toLowerCase();
   const canJoin = useCanJoin(circle, address);
+  const vouchedBy = useVouchFor(circle.id, address);
   const missing = circle.size - circle.members.length;
-  const short = wif !== undefined && wif < circle.bond;
+  const short = !vouchedBy && wif !== undefined && wif < circle.bond;
   // The creator always sits last, so a new member takes the turn just before them.
   const creatorIn = circle.members.some((m) => m.toLowerCase() === circle.creator.toLowerCase());
   const myTurn = creatorIn ? circle.members.length : circle.members.length + 1;
@@ -127,9 +129,12 @@ function OpenActions({ circle }: { circle: Circle }) {
         {!isConnected ? (
           <ConnectButton label="Connect a wallet to join" />
         ) : isMember ? (
-          <Button kind="secondary" disabled={tx.busy} onClick={() => tx.run({ ...ajo, functionName: "leave", args: [BigInt(circle.id)] }, "Leave the circle")}>
-            Leave and take my bond back
-          </Button>
+          <>
+            <Button kind="secondary" disabled={tx.busy} onClick={() => tx.run({ ...ajo, functionName: "leave", args: [BigInt(circle.id)] }, "Leave the circle")}>
+              Leave the circle
+            </Button>
+            <p className="mt-2 text-dim">The bond goes back to whoever locked it: you, or the person who vouched for you.</p>
+          </>
         ) : canJoin === undefined ? (
           <p className="text-dim">Checking the invite list…</p>
         ) : canJoin === false ? (
@@ -164,23 +169,33 @@ function OpenActions({ circle }: { circle: Circle }) {
                 worth more.
               </p>
             </div>
+            {vouchedBy && (
+              <p className="mb-4 border border-violet px-3 py-2">
+                <Addr address={vouchedBy} /> vouched for you: their {amount(circle.bond, WIF.decimals)} WIF bond covers you, so you only need USDG. If you
+                pay every round, it goes back to them; if you miss one, they lose it.
+              </p>
+            )}
             <Button
               disabled={tx.busy || short || canJoin === undefined}
               onClick={() =>
-                tx.run({ ...ajo, functionName: "join", args: [BigInt(circle.id)] }, "Join the circle", {
-                  token: WIF.address,
-                  amount: circle.bond,
-                  symbol: "WIF",
-                })
+                tx.run(
+                  { ...ajo, functionName: "join", args: [BigInt(circle.id)] },
+                  "Join the circle",
+                  vouchedBy ? undefined : { token: WIF.address, amount: circle.bond, symbol: "WIF" },
+                )
               }
             >
-              Join: lock {amount(circle.bond, WIF.decimals)} WIF
+              {vouchedBy ? "Join: bond covered" : `Join: lock ${amount(circle.bond, WIF.decimals)} WIF`}
             </Button>
             <p className="mt-2 text-dim">
               You would take the pot in round {myTurn}. You will pay {amount(circle.contribution, USDG.decimals)} USDG each round for {circle.size} rounds.
-              {wif !== undefined && <> You have {amount(wif, WIF.decimals)} WIF.</>}
+              {!vouchedBy && wif !== undefined && <> You have {amount(wif, WIF.decimals)} WIF.</>}
             </p>
-            {short && <p className="mt-2 text-amber">You need {amount(circle.bond, WIF.decimals)} WIF to join.</p>}
+            {short && (
+              <p className="mt-2 text-amber">
+                You need {amount(circle.bond, WIF.decimals)} WIF to join, or someone who knows you can vouch for you: they lock the bond on your behalf.
+              </p>
+            )}
           </>
         )}
         <TxStatus step={tx.step} error={tx.error} hash={tx.lastHash} />
@@ -194,6 +209,99 @@ function OpenActions({ circle }: { circle: Circle }) {
               Open the guide
             </a>
           </RobinSays>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * Lock the bond for someone without $WIF. While the circle is open anyone
+ * connected can vouch; at any time, a voucher sees the vouches still waiting
+ * to be used and can take them back.
+ */
+function VouchPanel({ circle }: { circle: Circle }) {
+  const { address } = useAccount();
+  const tx = useTx();
+  const undo = useTx();
+  const [text, setText] = useState("");
+  const pending = usePendingVouches(circle.id, address);
+  const open = phaseOf(circle) === "open";
+  const who = text.trim();
+  const valid = isAddress(who, { strict: false });
+  const target = valid ? (who as `0x${string}`) : undefined;
+  const allowed = useCanJoin(circle, target);
+  if (!address || (!open && pending.length === 0)) return null;
+
+  const self = valid && who.toLowerCase() === address.toLowerCase();
+  const inAlready = valid && circle.members.some((m) => m.toLowerCase() === who.toLowerCase());
+  const problem = !who
+    ? null
+    : !valid
+      ? "That isn't a wallet address."
+      : self
+        ? "To use your own bond, just join."
+        : inAlready
+          ? "They're already in this circle."
+          : allowed === false
+            ? "This circle is invite-only and they're not on the list. Ask the person who started it to invite them first."
+            : null;
+
+  return (
+    <Panel label="× Vouch for someone">
+      {open && (
+        <>
+          <p className="leading-relaxed">
+            Know someone who wants to save but has no $WIF? Lock the <strong>{amount(circle.bond, WIF.decimals)} WIF</strong> bond for them, so they only need
+            USDG.
+          </p>
+          <p className="mt-2 text-dim">
+            If they pay every round, the bond comes back to you. If they miss one, you lose it. They still choose whether to join, and until they do, you can
+            take it back.
+          </p>
+          <label className="mt-4 block">
+            <span className="font-display text-xs uppercase tracking-wider text-dim">Their wallet</span>
+            <input
+              className="mt-1.5 w-full border border-line bg-void px-3.5 py-2.5 text-base outline-none focus:border-lime"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="0x…"
+              spellCheck={false}
+            />
+          </label>
+          {problem && <p className="mt-2 text-amber">{problem}</p>}
+          <Button
+            kind="secondary"
+            className="mt-3"
+            disabled={!target || !!problem || allowed === undefined || tx.busy}
+            onClick={async () => {
+              const r = await tx.run({ ...ajo, functionName: "vouch", args: [BigInt(circle.id), target!] }, "Vouch", {
+                token: WIF.address,
+                amount: circle.bond,
+                symbol: "WIF",
+              });
+              if (r) setText("");
+            }}
+          >
+            Lock {amount(circle.bond, WIF.decimals)} WIF for them
+          </Button>
+          <TxStatus step={tx.step} error={tx.error} hash={tx.lastHash} />
+        </>
+      )}
+      {pending.length > 0 && (
+        <div className={open ? "mt-5 border-t border-line pt-4" : ""}>
+          <h3 className="font-display text-sm uppercase">Your vouches waiting to be used</h3>
+          <ul className="mt-2 space-y-2">
+            {pending.map((m) => (
+              <li key={m} className="flex flex-wrap items-center justify-between gap-2">
+                <Addr address={m} />
+                <Button kind="quiet" className="min-h-0 px-2 py-1" disabled={undo.busy} onClick={() => undo.run({ ...ajo, functionName: "withdrawVouch", args: [BigInt(circle.id), m] }, "Take back the bond")}>
+                  Take back {amount(circle.bond, WIF.decimals)} WIF
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <TxStatus step={undo.step} error={undo.error} hash={undo.lastHash} />
         </div>
       )}
     </Panel>
@@ -372,10 +480,18 @@ function RoundPanel({ circle, members, potSoFar, now }: { circle: Circle; member
 }
 
 function FinishedPanel({ circle, members, bondShare }: { circle: Circle; members: MemberState[]; bondShare?: bigint }) {
+  const { address } = useAccount();
   const me = useMe(members);
   const tx = useTx();
+  const back = useTx();
   const everyoneMissed = circle.defaults >= circle.size;
   const canClaim = !!me && !me.bondClaimed && (!me.defaulted || everyoneMissed);
+  const vouchedMe = !!me?.bondPaidBy && me.bondPaidBy.toLowerCase() !== me.address.toLowerCase();
+  const share = bondShare !== undefined && bondShare > circle.bond ? bondShare - circle.bond : 0n;
+  // Members this wallet vouched for (not itself).
+  const mine = members.filter(
+    (m) => m.bondPaidBy?.toLowerCase() === address?.toLowerCase() && m.address.toLowerCase() !== address?.toLowerCase(),
+  );
 
   return (
     <Panel>
@@ -393,13 +509,43 @@ function FinishedPanel({ circle, members, bondShare }: { circle: Circle; members
           {me.bondClaimed ? (
             <p className="border border-lime px-3 py-2 text-lime">You have claimed your bond.</p>
           ) : canClaim ? (
-            <Button disabled={tx.busy} onClick={() => tx.run({ ...ajo, functionName: "claimBond", args: [BigInt(circle.id)] }, "Claim your bond")}>
-              Claim {amount(bondShare, WIF.decimals)} WIF
-            </Button>
+            <>
+              <Button disabled={tx.busy} onClick={() => tx.run({ ...ajo, functionName: "claimBond", args: [BigInt(circle.id), me.address] }, "Claim your bond")}>
+                {vouchedMe ? (share > 0n ? `Claim: ${amount(share, WIF.decimals)} WIF to you` : "Return the bond to your voucher") : `Claim ${amount(bondShare, WIF.decimals)} WIF`}
+              </Button>
+              {vouchedMe && (
+                <p className="mt-2 text-dim">
+                  The {amount(circle.bond, WIF.decimals)} WIF bond goes back to <Addr address={me.bondPaidBy!} />, who vouched for you
+                  {share > 0n ? "; your share of the lost bonds is yours." : "."}
+                </p>
+              )}
+            </>
           ) : (
             <p className="border border-red px-3 py-2 text-red">You missed a round, so your bond went to the members who kept paying.</p>
           )}
           <TxStatus step={tx.step} error={tx.error} hash={tx.lastHash} />
+        </div>
+      )}
+      {mine.length > 0 && (
+        <div className="mt-5 border-t border-line pt-4">
+          <h3 className="font-display text-sm uppercase">People you vouched for</h3>
+          <ul className="mt-2 space-y-2">
+            {mine.map((m) => (
+              <li key={m.address} className="flex flex-wrap items-center justify-between gap-2">
+                <Addr address={m.address} />
+                {m.bondClaimed ? (
+                  <Badge tone="lime">Bond returned to you</Badge>
+                ) : m.defaulted && !everyoneMissed ? (
+                  <Badge tone="red">Missed a round: your bond is lost</Badge>
+                ) : (
+                  <Button kind="secondary" className="min-h-0 px-3 py-1.5" disabled={back.busy} onClick={() => back.run({ ...ajo, functionName: "claimBond", args: [BigInt(circle.id), m.address] }, "Return your bond")}>
+                    Return my {amount(circle.bond, WIF.decimals)} WIF
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <TxStatus step={back.step} error={back.error} hash={back.lastHash} />
         </div>
       )}
     </Panel>
@@ -452,6 +598,7 @@ function MemberList({ circle, members, now, rounds }: { circle: Circle; members:
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 {isCreator(m.address) && <Badge>Started it · paid last</Badge>}
+                {m.bondPaidBy && m.bondPaidBy.toLowerCase() !== m.address.toLowerCase() && <Badge tone="violet">Vouched for</Badge>}
                 {current && <Badge tone="violet">Takes this pot</Badge>}
                 {settled && past && !past.refunded && (
                   <a href={`${explorer}/tx/${past.tx}`} target="_blank" rel="noreferrer">

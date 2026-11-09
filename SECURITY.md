@@ -2,7 +2,7 @@
 
 **This is an internal review by the builders, not a professional audit.** An audit means an independent firm, several reviewers and usually weeks of work. Until Ajo has one, use small amounts.
 
-- **Scope:** `contracts/src/Ajo.sol`, deployed on Robinhood Chain at [`0x75A67714D383F80979C300e22ceDB5Dd6DDd09ed`](https://robinhoodchain.blockscout.com/address/0x75A67714D383F80979C300e22ceDB5Dd6DDd09ed); the two tokens it depends on; and the parts of the app that send transactions (`app/src/lib/tx.ts`).
+- **Scope:** `contracts/src/Ajo.sol` as in this repository (including vouching), the two tokens it depends on, and the parts of the app that send transactions (`app/src/lib/tx.ts`).
 - **Deployed code = tested code:** the bytecode on the chain matches this repository's build byte for byte, apart from the two token addresses set at deployment and the compiler's metadata hash.
 - **Date:** November 2026.
 
@@ -13,12 +13,12 @@
 3. Automated checks of money conservation:
    - a fuzz test of random paying and skipping in one circle (512 runs);
    - an invariant test: random sequences of every action (create, join, leave, invite, pay, close, wait, withdraw, claim) by five people across up to six circles, 300 runs of 60 steps;
-   - a measured random walk: 40 runs of 150 steps, checking every rule after every step. In the last run it reached 274 joins, 147 payments, 60 rounds closed by hand, 77 missed payments, 25 withdrawals, 8 bond claims and 18 finished circles.
+   - a measured random walk: 40 runs of 150 steps, checking every rule after every step. In the last run it reached 274 joins, 125 payments, 58 rounds closed by hand, 81 missed payments, 23 withdrawals, 8 bond claims, 17 finished circles, 28 vouches and 7 members joining on a vouch.
 
-   The rules checked: all USDG in the contract is either owed to someone or in a round not yet closed; all $WIF is a bond still locked (allowing only division dust); no circle ever pays out more $WIF than was locked in it; the creator, while a member, is always last; nobody is listed twice; rounds never pass the end.
+   The rules checked: all USDG in the contract is either owed to someone or in a round not yet closed; all $WIF is a bond still locked or a vouch not yet used (allowing only division dust); no circle ever pays out more $WIF than was locked in it; the creator, while a member, is always last; nobody is listed twice; rounds never pass the end.
 4. Reading both token contracts directly from the chain.
 
-All 26 tests pass (`cd contracts && forge test`).
+All 33 tests pass (`cd contracts && forge test`).
 
 ## Findings
 
@@ -34,11 +34,13 @@ All 26 tests pass (`cd contracts && forge test`).
 | 8 | Invites cannot be withdrawn, and invite lists are public on the chain (friends' wallet addresses are visible). | Info | Accepted; noted for users. |
 | 9 | When lost bonds are shared out, a remainder smaller than the number of claimers (in the token's smallest unit) stays in the contract. | Info | Accepted: at most a few units of 10⁻¹⁸ $WIF. |
 | 10 | Circle names are free text and could be misleading. | Info | The app shows them as plain text (no script injection is possible). |
+| 11 | A vouched member risks none of their own $WIF: the voucher carries that risk. | Info | By design; it is the point of vouching (someone who knows them answers for them). The app tells vouchers they lose the bond if the member misses a round, and the leaderboard shows each voucher's record. |
+| 12 | Anyone can vouch for an eligible wallet first, which takes the place of a friend's vouch. | Info | Accepted: it only ever covers the member's bond at the stranger's own risk, and if the stranger takes it back, the friend can vouch again. A vouch never forces anyone to join. |
 
 ## What was checked and found sound
 
 - **Reentrancy:** every function that moves tokens is `nonReentrant` and updates state before transferring; `invite` moves no tokens. Neither token calls the receiver during a transfer (no ERC-777-style hooks), judging by the functions in their code.
-- **Pull payments:** money leaves only through `withdraw` and `claimBond`, taken by its owner. Closing a round never sends tokens, so one blocked or frozen member cannot stop a circle.
+- **Pull payments:** money leaves only through `withdraw`, `claimBond`, `leave` and `withdrawVouch`, always to the person it belongs to. `claimBond` can be triggered by anyone, but the bond always goes to whoever locked it and the share to the member. Closing a round never sends tokens, so one blocked or frozen member cannot stop a circle.
 - **Bounded work:** at most 20 members, 20 rounds and 50 invites per call. Nothing loops over the invite list.
 - **Arithmetic:** Solidity 0.8 checked maths; amounts are `uint128`, sizes and times fit their types.
 - **Access:** only the creator can invite; invite-only circles refuse everyone else; members cannot join twice, pay twice, collect twice or claim twice.

@@ -29,6 +29,9 @@ const reasons: Record<string, string> = {
   NotCreator: "Only the person who started this circle can invite people.",
   NotInviteOnly: "This circle is open to anyone, so there is no invite list.",
   TooManyInvites: "That is too many wallets at once: add 50 at most.",
+  BadVouch: "You can vouch for someone else, not for yourself.",
+  AlreadyVouched: "Someone has already locked a bond for this wallet in this circle.",
+  NotVoucher: "Only the person who locked this bond can take it back, and only before the member joins.",
   ERC20InsufficientBalance: "Your wallet does not have enough of this token.",
   ERC20InsufficientAllowance: "The approval was too small. Try again.",
 };

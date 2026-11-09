@@ -21,18 +21,19 @@ It runs on trust, and that is its oldest problem: someone takes the pot early an
 - **Every member locks a $WIF bond to join.** Pay every round and you get it back at the end, plus an equal share of any bonds others lost. Miss a round and your bond goes to the members who kept paying.
 - **The creator takes the last pot.** Whoever sets the terms (including the bond) is paid last, so they cannot set a weak bond, take the first pot themselves and disappear. The creator is also the member most exposed to others walking away, so they have every reason to set a strong bond.
 - **Circles can be invite-only.** The creator lists the wallets of the people they save with, so strangers cannot rush in to grab the early turns.
+- **Vouch for someone.** Anyone with $WIF can lock the bond *for* a friend or relative who has none, so the newcomer only needs USDG. If the newcomer pays every round, the bond goes back to the voucher; if they miss one, the voucher loses it. That is how an ajo has always taken in new people: someone who knows them answers for them. The leaderboard shows each voucher's record ("vouches kept").
 
 ### Why $WIF
 
-$WIF is the commitment, not the savings. Every member of every circle needs $WIF to join, and every round brings every member back to pay. Finished circles build a public track record (the leaderboard ranks savers by rounds paid on time), which is what makes the next circle easier to fill.
+$WIF is the commitment, not the savings. Every seat in every circle is backed by a $WIF bond, and every round brings every member back to pay. Vouching turns members into the way new people arrive: to bring in someone who has no $WIF, a member locks $WIF for them, and a good vouching record is public. Finished circles build a track record (the leaderboard ranks savers by rounds paid on time), which makes the next circle easier to fill.
 
 ## How a circle works
 
 1. **Start**: choose the amount per round (USDG), the bond ($WIF), the number of members (2 to 20), the round length (1 minute to 30 days), and optionally who may join.
-2. **Join**: each member locks the bond. Until the circle is full, anyone can leave and take their bond back. It starts the moment it is full.
+2. **Join**: each member locks the bond, or uses a bond someone locked for them (a vouch). Until the circle is full, anyone can leave, and the bond goes back to whoever locked it. It starts the moment it is full.
 3. **Each round**: everyone pays. When all members still in good standing have paid, anyone can close the round early; otherwise it closes when its time is up. The pot goes to that round's member and waits in the contract until they withdraw it.
 4. **Missed a payment?** That member is out and their bond goes into a penalty pool. If the member who was due the pot is the one who missed, the pot goes back to the payers.
-5. **The end**: everyone who paid every round claims their bond back plus an equal share of the penalty pool.
+5. **The end**: everyone who paid every round gets their bond back plus an equal share of the penalty pool. For a vouched member, the bond goes back to the voucher and the share to the member. Anyone can trigger a claim, so a voucher never depends on the member coming back.
 
 The app includes a six-step guide ("Robin", a pixel squid) that explains this and checks the visitor's wallet for what they need.
 
@@ -67,7 +68,7 @@ cd contracts
 forge test
 ```
 
-26 tests, including a fuzz test of random paying and skipping, an invariant test (thousands of random sequences of every action across several circles), and a measured random walk that checks after every step that every USDG and $WIF the contract holds is accounted for, the creator stays last, and nobody is listed twice. See [SECURITY.md](SECURITY.md) for the full review.
+33 tests, including a fuzz test of random paying and skipping, an invariant test (thousands of random sequences of every action across several circles), and a measured random walk that checks after every step that every USDG and $WIF the contract holds is accounted for, the creator stays last, and nobody is listed twice. See [SECURITY.md](SECURITY.md) for the full review.
 
 ### Run the app
 

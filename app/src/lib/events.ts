@@ -56,19 +56,23 @@ export type Saver = {
   circles: number; // joined and did not leave
   finished: number; // circles finished in good standing (bond claimed back)
   wifEarned: bigint; // share of other members' lost bonds
+  vouchesKept: number; // people this wallet vouched for who finished in good standing
+  vouchesLost: number; // people this wallet vouched for who missed a round
 };
 
 /** Turn the raw event history into one row per wallet. */
 export function buildLeaderboard(events: AjoEvent[]): Saver[] {
   const bondOf = new Map<bigint, bigint>();
   const defaultedIn = new Set<string>(); // `${circle}:${member}`
+  const offered = new Map<string, string>(); // `${circle}:${member}` -> voucher, before the member joins
+  const backing = new Map<string, string>(); // `${circle}:${member}` -> voucher whose bond covers them
   const rows = new Map<string, Saver>();
   const row = (a: unknown): Saver => {
     const address = a as `0x${string}`;
     const key = address.toLowerCase();
     let r = rows.get(key);
     if (!r) {
-      r = { address, roundsPaid: 0, usdgSaved: 0n, missed: 0, potsTaken: 0, usdgReceived: 0n, circles: 0, finished: 0, wifEarned: 0n };
+      r = { address, roundsPaid: 0, usdgSaved: 0n, missed: 0, potsTaken: 0, usdgReceived: 0n, circles: 0, finished: 0, wifEarned: 0n, vouchesKept: 0, vouchesLost: 0 };
       rows.set(key, r);
     }
     return r;
@@ -80,11 +84,28 @@ export function buildLeaderboard(events: AjoEvent[]): Saver[] {
       case "CircleCreated":
         bondOf.set(a.id as bigint, a.bond as bigint);
         break;
-      case "Joined":
+      case "Joined": {
         row(a.member).circles += 1;
+        const k = `${a.id}:${String(a.member).toLowerCase()}`;
+        const v = offered.get(k);
+        if (v) {
+          backing.set(k, v);
+          offered.delete(k);
+        }
         break;
+      }
       case "Left":
         row(a.member).circles -= 1;
+        backing.delete(`${a.id}:${String(a.member).toLowerCase()}`);
+        break;
+      case "Vouched":
+        offered.set(`${a.id}:${String(a.member).toLowerCase()}`, String(a.voucher));
+        break;
+      case "VouchWithdrawn":
+        offered.delete(`${a.id}:${String(a.member).toLowerCase()}`);
+        break;
+      case "VouchReturned":
+        if (!defaultedIn.has(`${a.id}:${String(a.member).toLowerCase()}`)) row(a.voucher).vouchesKept += 1;
         break;
       case "Contributed": {
         const r = row(a.member);
@@ -92,10 +113,14 @@ export function buildLeaderboard(events: AjoEvent[]): Saver[] {
         r.usdgSaved += a.amount as bigint;
         break;
       }
-      case "Defaulted":
+      case "Defaulted": {
         row(a.member).missed += 1;
-        defaultedIn.add(`${a.id}:${String(a.member).toLowerCase()}`);
+        const k = `${a.id}:${String(a.member).toLowerCase()}`;
+        defaultedIn.add(k);
+        const v = backing.get(k);
+        if (v) row(v).vouchesLost += 1;
         break;
+      }
       case "RoundSettled":
         if (!a.refunded) {
           const r = row(a.recipient);
@@ -119,7 +144,7 @@ export function buildLeaderboard(events: AjoEvent[]): Saver[] {
   }
 
   return [...rows.values()]
-    .filter((r) => r.roundsPaid > 0 || r.missed > 0 || r.circles > 0)
+    .filter((r) => r.roundsPaid > 0 || r.missed > 0 || r.circles > 0 || r.vouchesKept + r.vouchesLost > 0)
     .sort(
       (x, y) =>
         y.roundsPaid - x.roundsPaid ||

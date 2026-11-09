@@ -167,7 +167,7 @@ contract AjoTest is Test {
         // Bonds come back in full.
         for (uint256 i; i < 3; ++i) {
             vm.prank(order[i]);
-            ajo.claimBond(id);
+            ajo.claimBond(id, order[i]);
             assertEq(wif.balanceOf(order[i]), 1_000e18);
         }
         assertEq(usdg.balanceOf(address(ajo)), 0);
@@ -238,7 +238,7 @@ contract AjoTest is Test {
 
         uint256 before = wif.balanceOf(ben);
         vm.prank(ben);
-        ajo.claimBond(id);
+        ajo.claimBond(id, ben);
         assertEq(wif.balanceOf(ben) - before, BOND);
         assertEq(ajo.getCircle(id).roundsSettled, 2);
         assertEq(ajo.owed(ben), 2 * PAY); // the last pot reached ben
@@ -281,13 +281,13 @@ contract AjoTest is Test {
         // ada cannot pay again or reclaim her bond.
         vm.prank(ada);
         vm.expectRevert(Ajo.MemberDefaulted.selector);
-        ajo.claimBond(id);
+        ajo.claimBond(id, ada);
 
         // ben and chi split ada's bond.
         vm.prank(ben);
-        ajo.claimBond(id);
+        ajo.claimBond(id, ben);
         vm.prank(chi);
-        ajo.claimBond(id);
+        ajo.claimBond(id, chi);
         assertEq(wif.balanceOf(ben), 1_000e18 + BOND / 2);
         assertEq(wif.balanceOf(chi), 1_000e18 + BOND / 2);
     }
@@ -332,7 +332,7 @@ contract AjoTest is Test {
         uint256 id = _circle(2);
         vm.prank(ada);
         vm.expectRevert(Ajo.NotOver.selector);
-        ajo.claimBond(id);
+        ajo.claimBond(id, ada);
     }
 
     function test_claimBondOnce() public {
@@ -344,10 +344,10 @@ contract AjoTest is Test {
             vm.warp(block.timestamp + ROUND);
         }
         vm.prank(ada);
-        ajo.claimBond(id);
+        ajo.claimBond(id, ada);
         vm.prank(ada);
         vm.expectRevert(Ajo.AlreadyClaimed.selector);
-        ajo.claimBond(id);
+        ajo.claimBond(id, ada);
     }
 
     function test_strangersCannotTouchACircle() public {
@@ -491,6 +491,182 @@ contract AjoTest is Test {
         ajo.createCircle("x", PAY, BOND, 3, ROUND, crowd);
     }
 
+    // ─── vouching: locking the bond for someone without $WIF ──────────────
+
+    /// A newcomer with USDG but no $WIF at all.
+    function _newbie() internal returns (address n) {
+        n = makeAddr("newbie");
+        usdg.mint(n, 1_000e6);
+        vm.prank(n);
+        usdg.approve(address(ajo), type(uint256).max);
+        assertEq(wif.balanceOf(n), 0);
+    }
+
+    function test_vouchLetsANewcomerJoinWithoutWif() public {
+        address n = _newbie();
+        vm.prank(ada);
+        uint256 id = ajo.createCircle("x", PAY, BOND, 2, ROUND, none);
+        vm.prank(chi); // chi is not in the circle; vouching does not require it
+        ajo.vouch(id, n);
+        assertEq(wif.balanceOf(chi), 1_000e18 - BOND, "voucher locked the bond");
+        assertEq(ajo.vouchFrom(id, n), chi);
+
+        vm.prank(n);
+        ajo.join(id); // no $WIF needed
+        assertEq(ajo.bondPaidBy(id, n), chi);
+        assertEq(ajo.vouchFrom(id, n), address(0), "vouch used up");
+        assertEq(ajo.pendingVouches(id), 0);
+
+        for (uint256 r; r < 2; ++r) {
+            _pay(id, n);
+            _pay(id, ada);
+            ajo.settleRound(id);
+        }
+        ajo.claimBond(id, n); // anyone can trigger it
+        assertEq(wif.balanceOf(chi), 1_000e18, "the bond came back to the voucher");
+        assertEq(wif.balanceOf(n), 0, "nothing extra: nobody missed a round");
+    }
+
+    function test_voucherLosesTheBondIfTheMemberMisses() public {
+        address n = _newbie();
+        vm.prank(ada);
+        uint256 id = ajo.createCircle("x", PAY, BOND, 3, ROUND, none);
+        vm.prank(chi);
+        ajo.vouch(id, n);
+        vm.prank(n);
+        ajo.join(id);
+        vm.prank(ben);
+        ajo.join(id); // order: newbie, ben, ada
+
+        // newbie never pays; ada and ben pay every round on time.
+        for (uint256 r; r < 3; ++r) {
+            _pay(id, ada);
+            _pay(id, ben);
+            vm.warp(block.timestamp + ROUND);
+        }
+        ajo.claimBond(id, ben); // closes the last round on the way
+        ajo.claimBond(id, ada);
+
+        assertTrue(ajo.isDefaulted(id, n));
+        vm.expectRevert(Ajo.MemberDefaulted.selector);
+        ajo.claimBond(id, n);
+        assertEq(wif.balanceOf(chi), 1_000e18 - BOND, "the voucher's bond is gone");
+        assertEq(wif.balanceOf(ben), 1_000e18 + BOND / 2, "shared by those who paid");
+        assertEq(wif.balanceOf(ada), 1_000e18 + BOND / 2);
+    }
+
+    /// An honest vouched member earns their share of others' lost bonds; the
+    /// voucher gets exactly their bond back.
+    function test_vouchedMemberKeepsTheirShareVoucherGetsTheBond() public {
+        address n = _newbie();
+        vm.prank(ada);
+        uint256 id = ajo.createCircle("x", PAY, BOND, 3, ROUND, none);
+        vm.prank(chi);
+        ajo.vouch(id, n);
+        vm.prank(n);
+        ajo.join(id);
+        vm.prank(ben);
+        ajo.join(id);
+
+        // ben never pays; newbie and ada pay every round on time.
+        for (uint256 r; r < 3; ++r) {
+            _pay(id, n);
+            _pay(id, ada);
+            vm.warp(block.timestamp + ROUND);
+        }
+        ajo.claimBond(id, n);
+        assertEq(wif.balanceOf(chi), 1_000e18, "voucher: bond back, no more");
+        assertEq(wif.balanceOf(n), BOND / 2, "newbie: half of ben's lost bond");
+    }
+
+    function test_withdrawVouchOnlyByTheVoucherAndOnlyBeforeJoining() public {
+        address n = _newbie();
+        vm.prank(ada);
+        uint256 id = ajo.createCircle("x", PAY, BOND, 3, ROUND, none);
+        vm.prank(chi);
+        ajo.vouch(id, n);
+
+        vm.prank(dan);
+        vm.expectRevert(Ajo.NotVoucher.selector);
+        ajo.withdrawVouch(id, n);
+
+        vm.prank(chi);
+        ajo.withdrawVouch(id, n);
+        assertEq(wif.balanceOf(chi), 1_000e18, "bond back");
+        assertEq(ajo.pendingVouches(id), 0);
+
+        vm.prank(n); // no vouch any more and no $WIF: cannot join
+        vm.expectRevert();
+        ajo.join(id);
+
+        // Once a vouch is used, it cannot be withdrawn.
+        vm.prank(chi);
+        ajo.vouch(id, n);
+        vm.prank(n);
+        ajo.join(id);
+        vm.prank(chi);
+        vm.expectRevert(Ajo.NotVoucher.selector);
+        ajo.withdrawVouch(id, n);
+    }
+
+    function test_aVouchedMemberWhoLeavesSendsTheBondBackToTheVoucher() public {
+        address n = _newbie();
+        vm.prank(ada);
+        uint256 id = ajo.createCircle("x", PAY, BOND, 3, ROUND, none);
+        vm.prank(chi);
+        ajo.vouch(id, n);
+        vm.prank(n);
+        ajo.join(id);
+        vm.prank(n);
+        ajo.leave(id);
+        assertEq(wif.balanceOf(chi), 1_000e18, "back to the voucher");
+        assertEq(wif.balanceOf(n), 0, "not to the newcomer");
+    }
+
+    function test_vouchRules() public {
+        address[] memory guests = new address[](1);
+        guests[0] = ben;
+        vm.prank(ada);
+        uint256 id = ajo.createCircle("x", PAY, BOND, 2, ROUND, guests);
+
+        vm.startPrank(chi);
+        vm.expectRevert(Ajo.BadVouch.selector);
+        ajo.vouch(id, chi); // not for yourself
+        vm.expectRevert(Ajo.BadVouch.selector);
+        ajo.vouch(id, address(0));
+        vm.expectRevert(Ajo.AlreadyMember.selector);
+        ajo.vouch(id, ada);
+        vm.expectRevert(Ajo.NotInvited.selector);
+        ajo.vouch(id, dan); // invite-only: dan is not on the list
+        ajo.vouch(id, ben);
+        vm.stopPrank();
+
+        vm.prank(dan);
+        vm.expectRevert(Ajo.AlreadyVouched.selector);
+        ajo.vouch(id, ben);
+
+        vm.prank(ben);
+        ajo.join(id); // full: started
+        vm.prank(chi);
+        vm.expectRevert(Ajo.AlreadyStarted.selector);
+        ajo.vouch(id, dan);
+    }
+
+    /// A vouch for someone who never joins can still be taken back after the
+    /// circle has started (or filled without them).
+    function test_anUnusedVouchCanBeTakenBackAfterTheStart() public {
+        address n = _newbie();
+        vm.prank(ada);
+        uint256 id = ajo.createCircle("x", PAY, BOND, 2, ROUND, none);
+        vm.prank(chi);
+        ajo.vouch(id, n);
+        vm.prank(ben);
+        ajo.join(id); // fills the circle without the newcomer
+        vm.prank(chi);
+        ajo.withdrawVouch(id, n);
+        assertEq(wif.balanceOf(chi), 1_000e18);
+    }
+
     // ─── money is never created or lost ───────────────────────────────────
 
     /// Whatever any member pays or skips, when every round is settled and
@@ -528,7 +704,7 @@ contract AjoTest is Test {
             bool everyoneDefaulted = ajo.getCircle(id).defaults == 4;
             if (!ajo.isDefaulted(id, people[i]) || everyoneDefaulted) {
                 vm.prank(people[i]);
-                ajo.claimBond(id);
+                ajo.claimBond(id, people[i]);
             }
         }
 
