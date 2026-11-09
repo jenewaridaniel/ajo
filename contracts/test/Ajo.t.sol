@@ -436,6 +436,43 @@ contract AjoTest is Test {
         ajo.invite(id, more);
     }
 
+    /// KNOWN LIMIT (review finding): "creator last" does not stop a creator who
+    /// also controls a SECOND wallet. They invite it and join with it first, so
+    /// that wallet takes round 1's pot. Only the bond's value, and members
+    /// checking who is ahead of them, protect against this. Kept as a test so
+    /// the limit stays documented and visible.
+    function test_knownLimit_creatorWithSecondWalletCanStillGoFirst() public {
+        address alt = makeAddr("ada's other wallet");
+        usdg.mint(alt, 1_000e6);
+        wif.mint(alt, 1_000e18);
+        vm.startPrank(alt);
+        usdg.approve(address(ajo), type(uint256).max);
+        wif.approve(address(ajo), type(uint256).max);
+        vm.stopPrank();
+
+        address[] memory guests = new address[](3);
+        guests[0] = alt;
+        guests[1] = ben;
+        guests[2] = chi;
+        vm.prank(ada);
+        uint256 id = ajo.createCircle("x", PAY, 1, 4, ROUND, guests); // a tiny bond
+        vm.prank(alt);
+        ajo.join(id); // first in line
+        vm.prank(ben);
+        ajo.join(id);
+        vm.prank(chi);
+        ajo.join(id);
+
+        _pay(id, alt);
+        _pay(id, ben);
+        _pay(id, chi);
+        _pay(id, ada);
+        ajo.settleRound(id);
+        assertEq(ajo.owed(alt), 4 * PAY, "the second wallet collects round 1");
+        // If alt and ada now stop paying, they keep 3 x PAY of other people's money
+        // and lose only two tiny bonds. Nothing in the contract can price that.
+    }
+
     function test_openCirclesCannotBeTurnedInviteOnly() public {
         vm.prank(ada);
         uint256 id = ajo.createCircle("x", PAY, BOND, 3, ROUND, none);

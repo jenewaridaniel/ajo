@@ -99,8 +99,8 @@ export default function CreateCircle() {
       <a href="#/" className="text-dim hover:underline">← All circles</a>
       <h1 className="mt-3 font-display text-4xl font-bold uppercase leading-none sm:text-6xl">Start a circle</h1>
       <p className="mt-2 text-dim">
-        You set the terms, so you take the <strong className="text-ink">last</strong> pot: everyone else is paid before you. That way nobody can set a weak bond
-        and run with the first pot. Share the link and the circle starts once it is full.
+        You set the terms, so you take the <strong className="text-ink">last</strong> pot: everyone else is paid before you, so nobody can accuse you of setting a
+        weak bond to take the first pot yourself. Share the link and the circle starts once it is full.
       </p>
 
       <Panel className="mt-6">

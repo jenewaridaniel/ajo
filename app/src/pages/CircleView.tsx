@@ -110,6 +110,10 @@ function OpenActions({ circle }: { circle: Circle }) {
   // The creator always sits last, so a new member takes the turn just before them.
   const creatorIn = circle.members.some((m) => m.toLowerCase() === circle.creator.toLowerCase());
   const myTurn = creatorIn ? circle.members.length : circle.members.length + 1;
+  // Everyone already in (except the creator, who is last) takes their pot before a new member.
+  const ahead = circle.members.filter((m) => m.toLowerCase() !== circle.creator.toLowerCase());
+  // The most one member could keep by taking the first pot and then not paying again.
+  const walkAway = circle.contribution * BigInt(circle.size - 1);
 
   return (
     <Panel>
@@ -135,6 +139,31 @@ function OpenActions({ circle }: { circle: Circle }) {
           </p>
         ) : (
           <>
+            <div className="mb-4 border border-line bg-void p-4 leading-relaxed">
+              <p className="font-display text-xs uppercase tracking-wider text-dim">Before you join</p>
+              <p className="mt-2">
+                {ahead.length === 0 ? (
+                  "Nobody else has joined yet, so you would take the first pot."
+                ) : (
+                  <>
+                    {ahead.length === 1 ? "1 member takes their pot" : `${ahead.length} members take their pot`} before you:{" "}
+                    {ahead.map((m, i) => (
+                      <span key={m}>
+                        {i > 0 && ", "}
+                        <Addr address={m} />
+                      </span>
+                    ))}
+                    .
+                  </>
+                )}
+              </p>
+              <p className="mt-2 text-dim">
+                Someone who takes an early pot and then stops paying could keep up to{" "}
+                <strong className="text-ink">{amount(walkAway, USDG.decimals)} USDG</strong> of other members' money, and would lose only their{" "}
+                <strong className="text-ink">{amount(circle.bond, WIF.decimals)} WIF</strong> bond. Join if you know everyone ahead of you, or if that bond is
+                worth more.
+              </p>
+            </div>
             <Button
               disabled={tx.busy || short || canJoin === undefined}
               onClick={() =>

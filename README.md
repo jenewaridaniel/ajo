@@ -19,7 +19,7 @@ It runs on trust, and that is its oldest problem: someone takes the pot early an
 - **The contract holds the money.** No organiser can run off with it, and nobody can change the payout order once a circle starts.
 - **Savings are in USDG**, a dollar stablecoin, so the pot does not move with a meme coin's price.
 - **Every member locks a $WIF bond to join.** Pay every round and you get it back at the end, plus an equal share of any bonds others lost. Miss a round and your bond goes to the members who kept paying.
-- **The creator takes the last pot.** Whoever sets the terms (including the bond) is paid last, so nobody can set a weak bond, take the first pot and disappear. The creator is also the member most exposed to others walking away, so they have every reason to set a strong bond.
+- **The creator takes the last pot.** Whoever sets the terms (including the bond) is paid last, so they cannot set a weak bond, take the first pot themselves and disappear. The creator is also the member most exposed to others walking away, so they have every reason to set a strong bond.
 - **Circles can be invite-only.** The creator lists the wallets of the people they save with, so strangers cannot rush in to grab the early turns.
 
 ### Why $WIF
@@ -67,7 +67,7 @@ cd contracts
 forge test
 ```
 
-23 tests, including a fuzz test that runs random mixes of paying and skipping and checks that no USDG or $WIF is ever created or lost.
+26 tests, including a fuzz test of random paying and skipping, an invariant test (thousands of random sequences of every action across several circles), and a measured random walk that checks after every step that every USDG and $WIF the contract holds is accounted for, the creator stays last, and nobody is listed twice. See [SECURITY.md](SECURITY.md) for the full review.
 
 ### Run the app
 
@@ -90,5 +90,6 @@ npm run dev
 Known limits:
 
 - The bond is in $WIF and the payments are in USDG, and the contract has no price feed. If the bond is worth less than *amount per round × (members − 1)*, a member who takes an early pot could still profit by leaving. The create form shows that figure so the creator can set the bond accordingly; invite-only circles limit who can try.
+- "Creator last" does not stop a creator who controls a second wallet: they can invite it and join with it first. The contract cannot tell two wallets belong to one person. Before joining, the app shows who takes their pot ahead of you and how much one of them could walk away with, so members can check they know everyone ahead of them. A test (`test_knownLimit_creatorWithSecondWalletCanStillGoFirst`) keeps this limit documented.
 - If $WIF's price falls during a circle, the bond protects less.
 - When every member has paid, rounds can close back to back. Nobody loses money; the round length works as a deadline, not a waiting time.

@@ -62,7 +62,7 @@ const steps: Step[] = [
         items={[
           <>
             <strong>Start:</strong> choose the amount each round, the bond, how many members (2 to 20) and how long a round lasts. You set the terms, so you take
-            the <strong>last</strong> pot: nobody can set a weak bond and run with the first one.
+            the <strong>last</strong> pot, so you can't set a weak bond and take the first pot yourself.
           </>,
           <>
             <strong>Invite:</strong> make the circle invite-only and list the wallets of the people you save with, so strangers can't rush in to grab the early
