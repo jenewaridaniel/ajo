@@ -104,7 +104,7 @@ function HowItWorks() {
           </p>
         </div>
         <p className="mt-5 text-[17px] leading-snug">
-          Hi, I'm {MASCOT}. In six short steps I'll show you why Ajo exists, what you need in your wallet, and how a circle works from joining to getting your bond
+          Hi, I'm {MASCOT}. In seven short steps I'll show you why Ajo exists, what you need in your wallet, and how a circle works from joining to getting your bond
           back.
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">

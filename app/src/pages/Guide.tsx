@@ -16,7 +16,7 @@ const steps: Step[] = [
   {
     tab: "Hello",
     title: `Hi, I'm ${MASCOT}`,
-    says: <>I'll show you why Ajo exists and how to use it. Six short steps, about two minutes.</>,
+    says: <>I'll show you why Ajo exists and how to use it. Seven short steps, about two minutes.</>,
     body: () => (
       <>
         <Why>
@@ -54,6 +54,41 @@ const steps: Step[] = [
     body: () => <WalletCheck />,
   },
   {
+    tab: "Vouch",
+    title: "Vouch for someone",
+    says: (
+      <>
+        No $WIF? That's fine, if someone who knows you vouches for you. It's how an ajo has always welcomed new people: someone answers for them.
+      </>
+    ),
+    body: () => (
+      <List
+        items={[
+          <>
+            <strong>What it is:</strong> someone with $WIF locks the bond on your behalf, so you only need USDG to take part.
+          </>,
+          <>
+            <strong>Pay every round</strong> and the bond goes back to them. Any share of bonds lost by others is yours.
+          </>,
+          <>
+            <strong>Miss a round</strong> and they lose their bond. So vouch only for people you know, and only accept a vouch from someone you'd hate to let
+            down.
+          </>,
+          <>
+            <strong>You still decide.</strong> A vouch never makes anyone join, and until you do, the voucher can take it back.
+          </>,
+          <>
+            <strong>It's on the record.</strong> The leaderboard shows how many of each person's vouches were kept.
+          </>,
+          <>
+            <strong>How:</strong> on the circle's page, use "Vouch for someone" with their wallet address. In an invite-only circle, they need to be on the invite
+            list first.
+          </>,
+        ]}
+      />
+    ),
+  },
+  {
     tab: "Start or join",
     title: "Start a circle, or join one",
     says: <>Start a circle and send the link to the people you save with, or open a link a friend sent you.</>,
@@ -67,10 +102,6 @@ const steps: Step[] = [
           <>
             <strong>Invite:</strong> make the circle invite-only and list the wallets of the people you save with, so strangers can't rush in to grab the early
             turns.
-          </>,
-          <>
-            <strong>Vouch:</strong> know someone with no $WIF? Lock the bond for them. If they pay every round you get it back; if they miss one, you lose it.
-            That's how an ajo has always taken in new people: someone who knows them answers for them.
           </>,
           <>
             <strong>Join:</strong> open the invite link and press Join. The pot goes round in the order people joined, with the creator last.
@@ -233,7 +264,11 @@ function WalletCheck() {
         </Need>
         <Need label="$WIF for the bond" ok={has(wif)} status={wif !== undefined ? `You have ${amount(wif, WIF.decimals)} WIF` : undefined}>
           Swap ETH for WIF in your wallet or on Pons. Check the address: <TokenLink address={WIF.address} />. Another token also called WIF (dogwifhat) is not
-          the one. No $WIF? Someone who knows you can <strong>vouch</strong> for you: they lock the bond on your behalf, and you only need USDG.
+          the one. No $WIF? Someone who knows you can{" "}
+          <a className={link} href="#/guide/4">
+            vouch
+          </a>{" "}
+          for you: they lock the bond on your behalf, and you only need USDG.
         </Need>
       </ul>
       {!isConnected && (

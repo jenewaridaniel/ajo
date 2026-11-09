@@ -35,7 +35,7 @@ $WIF is the commitment, not the savings. Every seat in every circle is backed by
 4. **Missed a payment?** That member is out and their bond goes into a penalty pool. If the member who was due the pot is the one who missed, the pot goes back to the payers.
 5. **The end**: everyone who paid every round gets their bond back plus an equal share of the penalty pool. For a vouched member, the bond goes back to the voucher and the share to the member. Anyone can trigger a claim, so a voucher never depends on the member coming back.
 
-The app includes a six-step guide ("Robin", a pixel squid) that explains this and checks the visitor's wallet for what they need.
+The app includes a seven-step guide ("Robin", a pixel squid) that explains this and checks the visitor's wallet for what they need.
 
 ## Onchain
 

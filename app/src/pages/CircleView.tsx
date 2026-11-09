@@ -170,10 +170,12 @@ function OpenActions({ circle }: { circle: Circle }) {
               </p>
             </div>
             {vouchedBy && (
-              <p className="mb-4 border border-violet px-3 py-2">
-                <Addr address={vouchedBy} /> vouched for you: their {amount(circle.bond, WIF.decimals)} WIF bond covers you, so you only need USDG. If you
-                pay every round, it goes back to them; if you miss one, they lose it.
-              </p>
+              <div className="mb-4">
+                <RobinSays size="sm">
+                  Good news: <Addr address={vouchedBy} /> vouched for you. Their {amount(circle.bond, WIF.decimals)} WIF bond covers you, so you only need USDG.
+                  Pay every round and it goes back to them. Miss one and they lose it, so don't let them down.
+                </RobinSays>
+              </div>
             )}
             <Button
               disabled={tx.busy || short || canJoin === undefined}
@@ -251,13 +253,15 @@ function VouchPanel({ circle }: { circle: Circle }) {
     <Panel label="× Vouch for someone">
       {open && (
         <>
-          <p className="leading-relaxed">
-            Know someone who wants to save but has no $WIF? Lock the <strong>{amount(circle.bond, WIF.decimals)} WIF</strong> bond for them, so they only need
-            USDG.
-          </p>
-          <p className="mt-2 text-dim">
-            If they pay every round, the bond comes back to you. If they miss one, you lose it. They still choose whether to join, and until they do, you can
-            take it back.
+          <RobinSays size="sm">
+            Know someone who wants to save but has no $WIF? Lock the <strong>{amount(circle.bond, WIF.decimals)} WIF</strong> bond for them and they only need
+            USDG. If they pay every round, it comes back to you. If they miss one, you lose it, so vouch for people you'd trust with your own money.
+          </RobinSays>
+          <p className="mt-3 text-dim">
+            They still choose whether to join, and until they do, you can take the bond back.{" "}
+            <a href="#/guide/4" className="text-lime underline underline-offset-2">
+              More about vouching
+            </a>
           </p>
           <label className="mt-4 block">
             <span className="font-display text-xs uppercase tracking-wider text-dim">Their wallet</span>
