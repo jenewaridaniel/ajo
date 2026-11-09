@@ -1,0 +1,80 @@
+@import "tailwindcss";
+@import "@fontsource/silkscreen/400.css";
+@import "@fontsource/silkscreen/700.css";
+@import "@fontsource/pixelify-sans/400.css";
+@import "@fontsource/pixelify-sans/600.css";
+
+/* See DESIGN.md. Dark only; neutrals tinted toward lime (hue 128). */
+@theme {
+  --color-void: oklch(0.2 0.006 128);
+  --color-grid: oklch(0.255 0.008 128);
+  --color-panel: oklch(0.235 0.008 128);
+  --color-line: oklch(0.38 0.012 128);
+  --color-ink: oklch(0.96 0.012 120);
+  --color-dim: oklch(0.76 0.02 125);
+  --color-lime: oklch(0.89 0.2 128);
+  --color-lime-deep: oklch(0.55 0.13 132);
+  --color-on-lime: oklch(0.2 0.03 130);
+  --color-violet: oklch(0.62 0.21 300);
+  --color-violet-ink: oklch(0.8 0.13 300);
+  --color-amber: oklch(0.84 0.15 80);
+  --color-red: oklch(0.72 0.18 28);
+
+  --font-display: "Silkscreen", ui-monospace, monospace;
+  --font-sans: "Pixelify Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-none: 0;
+  --shadow-block: 4px 4px 0 var(--color-lime-deep);
+  --shadow-block-sm: 2px 2px 0 var(--color-lime-deep);
+}
+
+html {
+  color-scheme: dark;
+  background: var(--color-void);
+}
+
+body {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.5;
+  /* The reference's signature: a fixed hairline grid behind everything. */
+  background-color: var(--color-void);
+  background-image:
+    linear-gradient(var(--color-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-attachment: fixed;
+  -webkit-font-smoothing: none;
+  /* Pixelify Sans draws "fi" as one glyph that reads like "A" ("First" became "Arst"). */
+  font-variant-ligatures: none;
+}
+
+::selection {
+  background: var(--color-lime);
+  color: var(--color-on-lime);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-lime);
+  outline-offset: 3px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.pixel {
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

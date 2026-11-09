@@ -1,0 +1,8 @@
+# Compiler output (rebuilt by `forge build`)
+out/
+cache/
+
+# Deployment records. Ignored for now because the only one so far is from a
+# local practice fork, labelled with the real chain id (4663). After the real
+# deployment, add its record on purpose with `git add -f`.
+broadcast/
