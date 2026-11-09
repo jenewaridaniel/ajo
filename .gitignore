@@ -3,3 +3,6 @@ CLAUDE.md
 .claude/
 
 .DS_Store
+
+# Local Netlify folder
+.netlify

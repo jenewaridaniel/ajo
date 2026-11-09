@@ -1,0 +1,9 @@
+# Netlify: build the web app in app/ and serve app/dist.
+# Routes are hash-based (#/c/3), so no redirect rules are needed.
+[build]
+  base = "app"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"

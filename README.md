@@ -4,6 +4,8 @@
 
 Built for the World is Flat hackathon.
 
+**Live app: [ajo-circle.netlify.app](https://ajo-circle.netlify.app)** (Robinhood Chain; you need a little ETH, USDG and $WIF there. The in-app guide explains how to get them.)
+
 ---
 
 ## The problem
@@ -45,7 +47,9 @@ Robinhood Chain (chain ID 4663). Explorer: [robinhoodchain.blockscout.com](https
 | USDG (savings) | [`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`](https://robinhoodchain.blockscout.com/token/0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168) |
 | $WIF, World is Flat (bond) | [`0x5173b8eA6923c2d40267890D45C46a3480954773`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773) |
 
-The first version ran a complete real circle with two members: create, join, four payments, two rounds closed, two pots withdrawn and two bonds claimed (12 transactions). Afterwards the contract held no USDG and no $WIF, and both members were back to their starting balances.
+**The current version** has run a real invite-only circle in which a member missed a round. The creator invited one wallet, which joined and took the first turn (the creator is last). The creator then did not pay round 1, so their 100 $WIF bond went to the member who kept paying. That member received its round 1 pot, was refunded its round 2 payment (the creator's turn, forfeited), and claimed 200 $WIF at the end: its own bond plus the lost one. Afterwards the contract held nothing (8 transactions).
+
+**The first version** ran a complete real circle with two members: create, join, four payments, two rounds closed, two pots withdrawn and two bonds claimed (12 transactions). Afterwards the contract held no USDG and no $WIF, and both members were back to their starting balances.
 
 Testing that version against its own code showed a way to cheat: the creator set the bond **and** took the first pot, so a small bond made "take the pot and leave" profitable. The current version fixes this (creator last, invite-only circles).
 
